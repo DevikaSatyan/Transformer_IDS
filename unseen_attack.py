@@ -73,11 +73,11 @@ train_features_all, train_labels_all, train_class_dist = load_and_analyze_datase
     'sonata_combined_attacks_preprocessed.csv', 'Sonata Dataset (Training)'
 )
 
-print()
 
-# Load testing dataset (Road)
+
+
 test_features_all, test_labels_all, test_class_dist = load_and_analyze_dataset(
-    'combined_attacks_preprocessed.csv', 'Road Dataset (Testing - Unseen Attack)'
+    'combined_attacks_preprocessed.csv', 'CAR HACKING (Testing - Unseen Attack)'
 )
 
 if train_features_all is None or test_features_all is None:
@@ -162,6 +162,7 @@ features_val_normalized = (features_val - features_min) / (features_max - featur
 features_test_normalized = (test_features - features_min) / (features_max - features_min + 1e-8)
 
 def create_sequences_with_stride(features, labels, window_size, stride):
+    sequences = []
     sequence_labels = []
     
     for i in range(0, len(features) - window_size + 1, stride):
@@ -187,7 +188,6 @@ def create_sequences_with_stride(features, labels, window_size, stride):
 
 
 X_train_seq, y_train_seq = create_sequences_with_stride(features_train_normalized, labels_train, WINDOW_SIZE, STRIDE)
-
 
 X_val_seq, y_val_seq = create_sequences_with_stride(features_val_normalized, labels_val, WINDOW_SIZE, STRIDE)
 
@@ -345,6 +345,99 @@ def calculate_balanced_accuracy(model, loader, device):
     return balanced_accuracy_score(all_targets, all_predictions)
 
 
+
+for epoch in range(EPOCHS):
+   
+    model.train()
+    running_loss = 0.0
+    correct_train = 0
+    total_train = 0
+    
+    for batch_idx, (inputs, targets) in enumerate(train_loader):
+        inputs, targets = inputs.to(device), targets.to(device)
+        
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion(outputs, targets)
+        loss.backward()
+        
+        
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
+        optimizer.step()
+        
+        running_loss += loss.item()
+        _, predicted = torch.max(outputs.data, 1)
+        total_train += targets.size(0)
+        correct_train += (predicted == targets).sum().item()
+    
+    train_loss = running_loss / len(train_loader)
+    train_acc = correct_train / total_train
+    train_balanced_acc = calculate_balanced_accuracy(model, train_loader, device)
+    
+    
+    model.eval()
+    val_loss = 0.0
+    correct_val = 0
+    total_val = 0
+    
+    with torch.no_grad():
+        for inputs, targets in val_loader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            
+            val_loss += loss.item()
+            _, predicted = torch.max(outputs.data, 1)
+            total_val += targets.size(0)
+            correct_val += (predicted == targets).sum().item()
+    
+    val_loss /= len(val_loader)
+    val_acc = correct_val / total_val
+    val_balanced_acc = calculate_balanced_accuracy(model, val_loader, device)
+    
+    
+    scheduler.step()
+    
+    
+    train_losses.append(train_loss)
+    val_losses.append(val_loss)
+    train_accuracies.append(train_acc)
+    val_accuracies.append(val_acc)
+    train_balanced_accuracies.append(train_balanced_acc)
+    val_balanced_accuracies.append(val_balanced_acc)
+    
+    
+    if (epoch + 1) % 10 == 0 or epoch < 5:
+        print(f"Epoch [{epoch+1}/{EPOCHS}] - "
+              f"Train Loss: {train_loss:.4f}, Train Bal Acc: {train_balanced_acc:.4f} - "
+              f"Val Loss: {val_loss:.4f}, Val Bal Acc: {val_balanced_acc:.4f}")
+    
+    
+    if val_balanced_acc > best_val_balanced_acc:
+        best_val_balanced_acc = val_balanced_acc
+        patience_counter = 0
+        
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'val_loss': val_loss,
+            'val_acc': val_acc,
+            'val_balanced_acc': val_balanced_acc,
+            'class_weights': class_weights.cpu(),
+            'normalization_params': {
+                'min': features_min,
+                'max': features_max
+            }
+        }, 'best_generalization_model.pth')
+    else:
+        patience_counter += 1
+        if patience_counter >= PATIENCE:
+            print(f" Early stopping triggered after {epoch+1} epochs")
+            break
+
+
 checkpoint = torch.load('best_generalization_model.pth', weights_only=False)
 model.load_state_dict(checkpoint['model_state_dict'])
 
@@ -461,5 +554,7 @@ for cls in all_unique_classes:
     actual_count = np.sum(test_targets == cls)
     predicted_count = np.sum(final_predictions == cls)
     correct_count = np.sum((test_targets == cls) & (final_predictions == cls))
+    if actual_count > 0:
+            print(f"  Detection Rate: {correct_count/actual_count:.4f}")
     
 
