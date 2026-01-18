@@ -3,7 +3,7 @@ This is the implementation of an encoder-only Transformer used for intrusion det
 ## The datasets used for this implementation are :
 1. [Car Hacking](https://ocslab.hksecurity.net/Datasets/car-hacking-dataset)
 2. [Survival Analysis](https://ocslab.hksecurity.net/Datasets/survival-ids)
-3. [Car hacking: attack & defense challenge 2020](https://ocslab.hksecurity.net/Datasets/carchallenge2020)
+3. [Car Hacking: Attack & Defense Challenge 2020](https://ocslab.hksecurity.net/Datasets/carchallenge2020)
 
 ## Code
 1. car_hacking.py: utilizes the transformer model to perform intrusion detection on the car hacking dataset
